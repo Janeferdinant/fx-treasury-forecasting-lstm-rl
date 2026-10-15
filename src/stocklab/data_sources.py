@@ -37,7 +37,8 @@ ASSETS: dict[str, AssetSpec] = {
         AssetSpec("GBPUSD", "GBP/USD (USD per GBP)", "fx", "DEXUSUK", "Board of Governors, H.10"),
         AssetSpec("USDCAD", "USD/CAD (CAD per USD)", "fx", "DEXCAUS", "Board of Governors, H.10"),
         AssetSpec("BRENT", "Brent crude spot (USD per barrel)", "commodity", "DCOILBRENTEU", "U.S. EIA"),
-        AssetSpec("HENRY_HUB", "Henry Hub natural gas spot (USD per MMBtu)", "commodity", "DHHNGSP", "U.S. EIA"),
+        AssetSpec("HENRY_HUB", "Henry Hub natural gas spot (USD per MMBtu)", "commodity", "DHHNGSP",
+                  "U.S. EIA"),
         AssetSpec("UST10Y", "10-year Treasury par-bond total return (from yields)", "rates", "DGS10",
                   "Board of Governors, H.15", kind="yield", maturity=10.0),
     ]
