@@ -51,23 +51,16 @@ def test_fed_parser_rejects_unknown_identifier_and_malformed_file():
         ds.parse_fed_ddp("just,one,line\n", "RXI_N.B.JA")
 
 
-def test_eia_parser_reads_date_and_price_columns():
-    raw = pd.DataFrame([["Sourcekey", "RBRTE"], ["Date", "Price"], [pd.Timestamp("2000-01-04"), 23.95],
-                        [pd.Timestamp("2000-01-05"), 23.72], [pd.Timestamp("2000-01-06"), None]])
-    s = ds.parse_eia_daily(raw)
-    assert list(s.index.strftime("%Y-%m-%d")) == ["2000-01-04", "2000-01-05"]
-    assert list(s.values) == [23.95, 23.72]
-
-
-def test_asset_registry_lists_only_documented_public_domain_series():
+def test_asset_registry_lists_only_federal_reserve_hosted_government_series():
     assert len(ds.ASSETS) >= 6
-    providers = {a.provider for a in ds.ASSETS.values()}
-    assert providers <= {"h10", "h15", "eia"}
     for spec in ds.ASSETS.values():
-        assert spec.source_key and spec.group in {"fx", "commodity", "rates"}
+        assert spec.provider in {"h10", "h15"}  # EIA spot prices are sourced from a commercial vendor: excluded
+        assert spec.source_key and spec.group in {"fx", "rates"}
         assert spec.kind in {"level", "yield"}
     assert ds.ASSETS["UST10Y"].kind == "yield" and ds.ASSETS["UST10Y"].maturity == 10.0
-    assert not any("S&P" in a.label or "Fama" in a.label for a in ds.ASSETS.values())
+    assert ds.ASSETS["UST2Y"].maturity == 2.0
+    assert sum(a.group == "fx" for a in ds.ASSETS.values()) >= 4
+    assert not any(w in a.label for a in ds.ASSETS.values() for w in ("S&P", "Fama", "NASDAQ", "Wilshire"))
 
 
 def test_returns_to_index_starts_at_100_and_compounds():

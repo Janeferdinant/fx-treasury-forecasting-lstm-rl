@@ -36,13 +36,6 @@ def _ddp_text(ids: list[str], level: dict[str, float], n: int = 300, seed: int =
     return "\n".join(head + rows) + "\n"
 
 
-def _eia_frame(n: int = 300, seed: int = 0, level: float = 20.0) -> pd.DataFrame:
-    idx = pd.bdate_range("2000-01-04", periods=n)
-    vals = level * np.cumprod(1 + np.random.default_rng(seed).normal(0, 0.01, n))
-    rows = [["Sourcekey", "x"], ["Date", "Price"]] + [[d, v] for d, v in zip(idx, vals, strict=True)]
-    return pd.DataFrame(rows)
-
-
 def test_download_retries_with_backoff_then_succeeds(tmp_path):
     calls, sleeps = [], []
 
@@ -69,7 +62,7 @@ def test_download_uses_cache_and_gives_up_with_a_clear_error(tmp_path):
         fetch.download("http://x", tmp_path, "g.csv", retries=2, opener=boom, sleeper=lambda s: None)
 
 
-def test_build_all_makes_every_asset_from_the_government_files(tmp_path):
+def test_build_all_makes_every_asset_from_the_federal_reserve_files(tmp_path):
     h10_ids = [a.source_key for a in ds.ASSETS.values() if a.provider == "h10"]
     h15_ids = [a.source_key for a in ds.ASSETS.values() if a.provider == "h15"]
     texts = {
@@ -78,10 +71,9 @@ def test_build_all_makes_every_asset_from_the_government_files(tmp_path):
     }
 
     def fake_fetch(url, cache, name, refresh=False, **kw):
-        return texts.get(url, b"eia")
+        return texts[url]
 
-    series = fetch.build_all(tmp_path, fetcher=fake_fetch, eia_reader=lambda blob: _eia_frame(),
-                             start="2000-01-03", end="2025-12-31", min_obs=100)
+    series = fetch.build_all(tmp_path, fetcher=fake_fetch, start="2000-01-03", end="2025-12-31", min_obs=100)
     assert set(series) == set(ds.ASSETS)
     for name, s in series.items():
         assert (s > 0).all() and s.index.is_monotonic_increasing, name
