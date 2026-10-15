@@ -15,7 +15,6 @@ dependencies = [
     "statsmodels",
     "torch",
     "gymnasium",
-    "xlrd",
 ]
 
 [project.scripts]
