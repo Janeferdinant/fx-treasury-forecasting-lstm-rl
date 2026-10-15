@@ -17,13 +17,30 @@ class _Resp(io.BytesIO):
         return False
 
 
-def _fred_text(sid: str, n: int = 300, seed: int = 0, level: float = 1.0) -> str:
+def _ddp_text(ids: list[str], level: dict[str, float], n: int = 300, seed: int = 0) -> str:
     idx = pd.bdate_range("2000-01-03", periods=n)
-    r = np.random.default_rng(seed).normal(0, 0.003, n)
-    vals = level * np.cumprod(1 + r)
-    lines = [f"observation_date,{sid}"] + [f"{d:%Y-%m-%d},{v:.4f}" for d, v in zip(idx, vals, strict=True)]
-    lines[5] = f"{idx[4]:%Y-%m-%d},."  # one missing observation
-    return "\n".join(lines) + "\n"
+    rng = np.random.default_rng(seed)
+    cols = {i: level[i] * np.cumprod(1 + rng.normal(0, 0.003, n)) for i in ids}
+    head = [
+        '"Series Description",' + ",".join(f'"{i}"' for i in ids),
+        '"Unit:",' + ",".join('"x"' for _ in ids),
+        '"Multiplier:",' + ",".join('"1"' for _ in ids),
+        '"Currency:",' + ",".join('"NA"' for _ in ids),
+        '"Unique Identifier: ",' + ",".join(f'"H10/H10/{i}"' for i in ids),
+        '"Time Period",' + ",".join(f'"{i}"' for i in ids),
+    ]
+    rows = []
+    for k, d in enumerate(idx):
+        cells = ["ND" if k == 7 else f"{cols[i][k]:.4f}" for i in ids]
+        rows.append(f"{d:%Y-%m-%d}," + ",".join(cells))
+    return "\n".join(head + rows) + "\n"
+
+
+def _eia_frame(n: int = 300, seed: int = 0, level: float = 20.0) -> pd.DataFrame:
+    idx = pd.bdate_range("2000-01-04", periods=n)
+    vals = level * np.cumprod(1 + np.random.default_rng(seed).normal(0, 0.01, n))
+    rows = [["Sourcekey", "x"], ["Date", "Price"]] + [[d, v] for d, v in zip(idx, vals, strict=True)]
+    return pd.DataFrame(rows)
 
 
 def test_download_retries_with_backoff_then_succeeds(tmp_path):
@@ -52,18 +69,23 @@ def test_download_uses_cache_and_gives_up_with_a_clear_error(tmp_path):
         fetch.download("http://x", tmp_path, "g.csv", retries=2, opener=boom, sleeper=lambda s: None)
 
 
-def test_build_all_makes_every_asset_from_fred_files(tmp_path):
-    def fake_fetch(url, cache, name, refresh=False, **kw):
-        sid = name.removeprefix("fred_").removesuffix(".csv")
-        level = 4.0 if ds.ASSETS_BY_FRED[sid].kind == "yield" else 1.0
-        return _fred_text(sid, level=level).encode()
+def test_build_all_makes_every_asset_from_the_government_files(tmp_path):
+    h10_ids = [a.source_key for a in ds.ASSETS.values() if a.provider == "h10"]
+    h15_ids = [a.source_key for a in ds.ASSETS.values() if a.provider == "h15"]
+    texts = {
+        fetch.H10_URL: _ddp_text(h10_ids, dict.fromkeys(h10_ids, 1.2)).encode(),
+        fetch.H15_URL: _ddp_text(h15_ids, dict.fromkeys(h15_ids, 4.0)).encode(),
+    }
 
-    series = fetch.build_all(tmp_path, fetcher=fake_fetch, start="2000-01-03", end="2025-12-31", min_obs=100)
+    def fake_fetch(url, cache, name, refresh=False, **kw):
+        return texts.get(url, b"eia")
+
+    series = fetch.build_all(tmp_path, fetcher=fake_fetch, eia_reader=lambda blob: _eia_frame(),
+                             start="2000-01-03", end="2025-12-31", min_obs=100)
     assert set(series) == set(ds.ASSETS)
     for name, s in series.items():
         assert (s > 0).all() and s.index.is_monotonic_increasing, name
-    # the yield asset is a total-return index built from yields, so it starts near 100
-    assert 50 < series["UST10Y"].iloc[0] < 150
+    assert 50 < series["UST10Y"].iloc[0] < 150  # a total-return index built from yields
 
 
 def test_write_processed_checksums_match_files(tmp_path):
