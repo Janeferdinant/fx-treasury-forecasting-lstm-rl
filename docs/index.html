@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Walk-forward results explorer</title>
+<meta name="description" content="Static explorer for walk-forward LSTM forecasting and DQN trading experiments on public daily data. Research code, not investment advice.">
+<link rel="icon" href="data:,">
+<style>
+:root{--bg:#f6f7f9;--surface:#fff;--text:#1b2430;--muted:#566274;--border:#d5dae1;--accent:#1d4ed8;--warn-bg:#fff3cd;--warn-text:#5c4400;--good:#146c43;--bad:#b42318;
+--c0:#1b2430;--c1:#1d4ed8;--c2:#b45309;--c3:#0f766e;--c4:#9333ea;--c5:#6b7280}
+@media (prefers-color-scheme:dark){:root{--bg:#11151b;--surface:#1a212b;--text:#e8ecf1;--muted:#a3afbf;--border:#2e3846;--accent:#7aa2ff;--warn-bg:#3a2f0b;--warn-text:#ffe29a;--good:#7ddba8;--bad:#ff9d94;
+--c0:#e8ecf1;--c1:#7aa2ff;--c2:#f0a35e;--c3:#4fd1c5;--c4:#c4a1ff;--c5:#9aa3b2}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.wrap{max-width:1100px;margin:0 auto;padding:0 16px 40px}
+.banner{margin:0;padding:10px 16px;background:var(--warn-bg);color:var(--warn-text);font-weight:600;text-align:center}
+h1{font-size:1.5rem;margin:18px 0 4px}h2{font-size:1.15rem;margin:0 0 8px}
+.lead{color:var(--muted);margin:0 0 14px;max-width:75ch}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px;margin:0 0 14px}
+.controls{display:flex;flex-wrap:wrap;gap:12px;align-items:end}
+label{font-weight:600;font-size:.9rem;display:block;margin-bottom:2px}
+select{font:inherit;color:var(--text);background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 10px;min-height:44px;width:100%;max-width:100%;text-overflow:ellipsis}
+.controls>div{min-width:0;flex:1 1 280px;max-width:100%}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;margin:8px 0}
+.legend label{display:flex;align-items:center;gap:6px;font-weight:400;margin:0;min-height:32px}
+.sw{display:inline-block;width:14px;height:4px;border-radius:2px}
+svg{width:100%;height:auto;display:block;touch-action:pan-y}
+.axis text{fill:var(--muted);font-size:11px}.grid line{stroke:var(--border)}
+.tip{font-size:.85rem;color:var(--muted);min-height:1.4em}
+.tablewrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:.88rem}
+th,td{padding:6px 8px;border-bottom:1px solid var(--border);text-align:right;white-space:nowrap}
+th:first-child,td:first-child{text-align:left}
+caption{text-align:left;color:var(--muted);padding-bottom:6px;white-space:normal;position:sticky;left:0;width:min(100%,calc(100vw - 64px))}
+.note{color:var(--muted);font-size:.88rem;margin:8px 0 0}
+.agg li{margin:2px 0}
+.err{color:var(--bad);font-weight:600}
+a{color:var(--accent)}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+</style>
+</head>
+<body>
+<div class="banner" role="note">Research code on public historical data. Not investment advice. Past performance does not predict future results.</div>
+<div class="wrap">
+<h1>Walk-forward results explorer</h1>
+<p class="lead">Precomputed results from <code>stocklab</code>: an LSTM forecast and a DQN trading agent, evaluated only on later, unseen days in expanding or rolling windows, against simple baselines and buy and hold. Only strategy results are shown (equity indexed to 100, drawdowns, metrics); no price series are embedded, and nothing is computed in your browser.</p>
+<div id="status" class="note" role="status">Loading results...</div>
+
+<section class="card" id="aggregate" hidden>
+<h2>Across all assets</h2>
+<ul class="agg" id="aggList"></ul>
+</section>
+
+<section class="card" id="main" hidden>
+<div class="controls">
+<div><label for="asset">Asset</label><select id="asset"></select></div>
+</div>
+<p class="note" id="period"></p>
+
+<h2 style="margin-top:14px">Strategy equity on the test days (start = 100, net of costs)</h2>
+<div class="legend" id="legend" role="group" aria-label="Strategies shown"></div>
+<svg id="chart" viewBox="0 0 800 340" role="img" aria-label="Equity curves of the strategies on the test days, indexed to 100"></svg>
+<div class="tip" id="tip" aria-live="polite">Move over or touch the chart to read values.</div>
+<h2 style="margin-top:14px">Drawdown from the previous peak (%)</h2>
+<svg id="ddchart" viewBox="0 0 800 260" role="img" aria-label="Drawdown of the strategies on the test days"></svg>
+
+<h2 style="margin-top:14px">Strategy summary</h2>
+<div class="tablewrap"><table id="stratTable"></table></div>
+
+<h2 style="margin-top:14px">One-day-ahead forecast accuracy</h2>
+<div class="tablewrap"><table id="fcTable"></table></div>
+
+<h2 style="margin-top:14px">Sensitivity to transaction costs (Sharpe ratio)</h2>
+<div class="tablewrap"><table id="costTable"></table></div>
+</section>
+
+<p class="note">Data: U.S. Federal Reserve Board H.10 exchange rates and H.15 Treasury constant-maturity yields (public-domain U.S. government data); see the repository's THIRD_PARTY_NOTICES.md. Source code and the exact commands are in the README.</p>
+</div>
+<script>
+"use strict";
+const NAMES = {buy_and_hold:"Buy and hold (always long)", ma_crossover:"Moving-average crossover", lstm_direction:"LSTM direction signal",
+  lstm_return_sign:"LSTM return-sign signal", dqn_ensemble:"DQN (3 seeds, equal weight)", flat:"Flat (cash)"};
+const ORDER = ["buy_and_hold","ma_crossover","lstm_direction","lstm_return_sign","dqn_ensemble","flat"];
+const COLORS = {buy_and_hold:"var(--c0)", ma_crossover:"var(--c2)", lstm_direction:"var(--c1)", lstm_return_sign:"var(--c3)", dqn_ensemble:"var(--c4)", flat:"var(--c5)"};
+const FC_NAMES = {zero:"Zero (random walk)", last:"Yesterday's return", drift:"Expanding mean (drift)", ses:"Exponential smoothing", arima:"ARIMA(1,0,1)", lstm:"LSTM (3 seeds averaged)"};
+let DATA = null, visible = new Set(ORDER);
+const $ = id => document.getElementById(id);
+const f = (x, d = 2) => (x === undefined || x === null || Number.isNaN(x)) ? "-" : Number(x).toFixed(d);
+const pct = (x, d = 1) => (x === undefined || x === null) ? "-" : (100 * x).toFixed(d) + "%";
+const p3 = x => (x === undefined || x === null) ? "-" : (x < 0.001 ? "<0.001" : x.toFixed(3));
+
+function el(tag, attrs = {}, text) {
+  const n = document.createElementNS(tag === "svg" || svgTags.has(tag) ? "http://www.w3.org/2000/svg" : "http://www.w3.org/1999/xhtml", tag);
+  for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v);
+  if (text !== undefined) n.textContent = text;
+  return n;
+}
+const svgTags = new Set(["g","line","path","text","rect","circle"]);
+
+function row(cells, tag = "td") {
+  const tr = document.createElement("tr");
+  cells.forEach((c, i) => { const t = document.createElement(i === 0 && tag === "td" ? "th" : tag); if (i === 0 && tag === "td") t.scope = "row"; t.textContent = c; tr.appendChild(t); });
+  return tr;
+}
+function fillTable(table, caption, head, rows) {
+  table.replaceChildren();
+  const cap = document.createElement("caption"); cap.textContent = caption; table.appendChild(cap);
+  const th = document.createElement("thead"); const hr = row(head, "th"); hr.querySelectorAll("th").forEach(h => h.scope = "col"); th.appendChild(hr); table.appendChild(th);
+  const tb = document.createElement("tbody"); rows.forEach(r => tb.appendChild(row(r))); table.appendChild(tb);
+}
+
+function drawLines(svgId, H, a, key, unit) {
+  const svg = $(svgId); svg.replaceChildren();
+  const W = 800, m = {l: 52, r: 12, t: 10, b: 28};
+  const names = ORDER.filter(k => a[key][k] && visible.has(k));
+  const dates = a.dates, n = dates.length;
+  if (!names.length) { svg.appendChild(el("text", {x: W / 2, y: H / 2, "text-anchor": "middle", fill: "currentColor"}, "Select at least one strategy")); return; }
+  let lo = Infinity, hi = -Infinity;
+  names.forEach(k => a[key][k].forEach(v => { lo = Math.min(lo, v); hi = Math.max(hi, v); }));
+  const pad = (hi - lo) * 0.05 || 1; lo -= pad; hi += pad;
+  const x = i => m.l + (W - m.l - m.r) * i / Math.max(1, n - 1);
+  const y = v => H - m.b - (H - m.t - m.b) * (v - lo) / (hi - lo);
+  const grid = el("g", {class: "grid axis"}); svg.appendChild(grid);
+  for (let k = 0; k <= 4; k++) {
+    const v = lo + (hi - lo) * k / 4;
+    grid.appendChild(el("line", {x1: m.l, x2: W - m.r, y1: y(v), y2: y(v)}));
+    grid.appendChild(el("text", {x: m.l - 6, y: y(v) + 4, "text-anchor": "end"}, v.toFixed(0) + unit));
+  }
+  const years = new Map(); dates.forEach((d, i) => { const yr = d.slice(0, 4); if (!years.has(yr)) years.set(yr, i); });
+  const ys = [...years.entries()]; const step = Math.ceil(ys.length / 6);
+  ys.forEach(([yr, i], k) => { if (k % step === 0) grid.appendChild(el("text", {x: x(i), y: H - 8, "text-anchor": "middle"}, yr)); });
+  names.forEach(k => {
+    const d = a[key][k].map((v, i) => (i ? "L" : "M") + x(i).toFixed(1) + " " + y(v).toFixed(1)).join(" ");
+    svg.appendChild(el("path", {d, fill: "none", stroke: COLORS[k], "stroke-width": k === "buy_and_hold" ? 2.4 : 1.6, "stroke-linejoin": "round"}));
+  });
+  const cross = el("line", {y1: m.t, y2: H - m.b, stroke: "currentColor", "stroke-opacity": 0.4, visibility: "hidden"});
+  svg.appendChild(cross);
+  const show = ev => {
+    const r = svg.getBoundingClientRect(); const cx = ((ev.touches ? ev.touches[0].clientX : ev.clientX) - r.left) / r.width * W;
+    const i = Math.max(0, Math.min(n - 1, Math.round((cx - m.l) / (W - m.l - m.r) * (n - 1))));
+    cross.setAttribute("x1", x(i)); cross.setAttribute("x2", x(i)); cross.setAttribute("visibility", "visible");
+    $("tip").textContent = dates[i] + ": " + names.map(k => NAMES[k] + " " + a.equity[k][i].toFixed(1) + " (drawdown " + a.drawdown[k][i].toFixed(1) + "%)").join(" | ");
+  };
+  svg.onmousemove = show; svg.ontouchstart = show; svg.ontouchmove = show;
+  svg.onmouseleave = () => { cross.setAttribute("visibility", "hidden"); };
+}
+function drawChart(a) { drawLines("chart", 340, a, "equity", ""); drawLines("ddchart", 260, a, "drawdown", "%"); }
+
+function render() {
+  const key = $("asset").value, a = DATA.assets[key];
+  $("period").textContent = `${a.label}. Test days: ${a.dates[0]} to ${a.dates[a.dates.length - 1]} (${a.group}). Every strategy starts flat at the start of each test block and pays ${DATA.base_cost_bps} basis points per unit of turnover.`;
+  drawChart(a);
+  const rows = ORDER.filter(k => a.strategies[k]).map(k => {
+    const s = a.strategies[k];
+    return [NAMES[k], pct(s.ann_return), f(s.sharpe) + " [" + f(s.sharpe_ci[0]) + ", " + f(s.sharpe_ci[1]) + "]", pct(s.max_drawdown), f(100 * s.final_equity, 1),
+      s.daily_excess_vs_benchmark === undefined ? "-" : (1e4 * s.daily_excess_vs_benchmark).toFixed(2) + " [" + (1e4 * s.daily_excess_ci[0]).toFixed(2) + ", " + (1e4 * s.daily_excess_ci[1]).toFixed(2) + "]",
+      pct(a.share_long_days[k], 0) + " / " + pct(a.share_short_days[k], 0), f(a.turnover[k], 3)];
+  });
+  fillTable($("stratTable"), "Annualised figures over the pooled test days. Brackets are 95% stationary-bootstrap intervals. The last column is the mean daily return minus buy and hold, in basis points.",
+    ["Strategy", "Annual return", "Sharpe [95% CI]", "Max drawdown", "Final equity (start = 100)", "Excess vs buy and hold, bp/day [95% CI]", "Long / short days", "Turnover / day"], rows);
+  const fr = ["zero", "last", "drift", "ses", "arima", "lstm"].filter(k => a.forecast[k]).map(k => {
+    const m = a.forecast[k];
+    return [FC_NAMES[k], (1e4 * m.rmse).toFixed(1), f(m.mse_skill_vs_zero * 100, 2) + "%", m.dm_p_vs_zero === undefined ? "-" : p3(m.dm_p_vs_zero),
+      m.dm_p_vs_drift === undefined ? "-" : p3(m.dm_p_vs_drift), m.directional_accuracy === undefined ? "-" : pct(m.directional_accuracy), m.directional_p_vs_always_up === undefined ? "-" : p3(m.directional_p_vs_always_up)];
+  });
+  fillTable($("fcTable"), "RMSE of the next-day log return, in basis points. MSE skill is the percentage reduction in squared error versus the zero forecast (negative means worse). The Diebold-Mariano p-values are one-sided: small means a lower error than the zero forecast or the drift forecast. 'Direction p' is a two-sided exact test of the hit rate against the rate an always-up rule would get (the share of up days), so a small value can also mean the forecast does worse than always-up.",
+    ["Forecast", "RMSE (bp)", "MSE skill vs zero", "DM p vs zero", "DM p vs drift", "Direction hit rate", "Direction p vs always-up"], fr);
+  const costs = Object.keys(a.signal_cost_sweep);
+  const sig = ["buy_and_hold", "ma_crossover", "lstm_direction", "lstm_return_sign", "flat"];
+  const crow = sig.map(k => [NAMES[k], ...costs.map(c => f(a.signal_cost_sweep[c][k].sharpe))]);
+  if (a.dqn_cost) crow.push([NAMES.dqn_ensemble, ...costs.map(c => f(a.dqn_cost[c].ensemble.sharpe))]);
+  fillTable($("costTable"), "Sharpe ratio by transaction cost in basis points per unit of turnover. The DQN agent was trained at " + DATA.base_cost_bps + " bp and only evaluated at the other costs.",
+    ["Strategy", ...costs.map(c => c + " bp")], crow);
+}
+
+function buildLegend() {
+  const box = $("legend"); box.replaceChildren();
+  ORDER.forEach(k => {
+    const lab = document.createElement("label");
+    const cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = visible.has(k);
+    cb.onchange = () => { cb.checked ? visible.add(k) : visible.delete(k); drawChart(DATA.assets[$("asset").value]); };
+    const sw = document.createElement("span"); sw.className = "sw"; sw.style.background = COLORS[k];
+    lab.append(cb, sw, document.createTextNode(NAMES[k])); box.appendChild(lab);
+  });
+}
+
+fetch("data.json").then(r => { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); }).then(d => {
+  DATA = d;
+  const sel = $("asset");
+  Object.entries(d.assets).forEach(([k, a]) => { const o = document.createElement("option"); o.value = k; o.textContent = a.label; sel.appendChild(o); });
+  sel.onchange = render;
+  const g = d.aggregate, n = g.n_assets, list = $("aggList");
+  const li = t => { const e = document.createElement("li"); e.textContent = t; list.appendChild(e); };
+  li(`LSTM has lower squared error than the zero forecast on ${g.lstm_mse_skill_positive.length} of ${n} assets (${g.lstm_mse_skill_positive.join(", ") || "none"}).`);
+  li(`After Holm correction across assets, the LSTM-versus-zero difference is significant at 5% on ${g.lstm_dm_significant_after_holm_5pct.length} of ${n} (${g.lstm_dm_significant_after_holm_5pct.join(", ") || "none"}).`);
+  li(`The DQN agents' equal-weight Sharpe ratio is above buy and hold on ${g.dqn_ensemble_sharpe_above_buy_and_hold.length} of ${g.dqn_assets.length} assets (${g.dqn_ensemble_sharpe_above_buy_and_hold.join(", ") || "none"}).`);
+  buildLegend(); render();
+  $("status").textContent = ""; $("aggregate").hidden = false; $("main").hidden = false;
+}).catch(e => {
+  const s = $("status"); s.className = "err"; s.textContent = "Could not load data.json (" + e.message + "). Serve this folder over HTTP, for example: python -m http.server --directory docs";
+});
+</script>
+</body>
+</html>

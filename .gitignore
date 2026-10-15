@@ -10,3 +10,4 @@ results/check_raw/
 *.pt
 *.pth
 *.pkl
+docs/_*.png

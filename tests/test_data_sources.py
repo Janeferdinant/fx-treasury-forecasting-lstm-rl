@@ -54,7 +54,7 @@ def test_fed_parser_rejects_unknown_identifier_and_malformed_file():
 def test_asset_registry_lists_only_federal_reserve_hosted_government_series():
     assert len(ds.ASSETS) >= 6
     for spec in ds.ASSETS.values():
-        assert spec.provider in {"h10", "h15"}  # EIA spot prices are sourced from a commercial vendor: excluded
+        assert spec.provider in {"h10", "h15"}  # EIA spot prices come from a commercial vendor: excluded
         assert spec.source_key and spec.group in {"fx", "rates"}
         assert spec.kind in {"level", "yield"}
     assert ds.ASSETS["UST10Y"].kind == "yield" and ds.ASSETS["UST10Y"].maturity == 10.0
