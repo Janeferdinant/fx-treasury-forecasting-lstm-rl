@@ -1,0 +1,18 @@
+{
+ "n_assets": 8,
+ "lstm_mse_skill_positive": [
+  "GBPUSD"
+ ],
+ "lstm_dm_significant_after_holm_5pct": [],
+ "dqn_ensemble_sharpe_above_buy_and_hold": [],
+ "dqn_assets": [
+  "EURUSD",
+  "USDJPY",
+  "GBPUSD",
+  "USDCAD",
+  "AUDUSD",
+  "USDCHF",
+  "UST2Y",
+  "UST10Y"
+ ]
+}
