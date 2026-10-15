@@ -29,7 +29,7 @@ trade:
 report:
 	$(PY) -m stocklab.cli report
 
-# tiny end-to-end check (US_MARKET, last two test blocks, one seed, few epochs): about a minute
+# tiny end-to-end check (EURUSD, last two test blocks, one seed, few epochs): about a minute
 smoke:
 	$(PY) -m stocklab.cli forecast --smoke --jobs 2 --raw-dir results/smoke_raw
 	$(PY) -m stocklab.cli trade --smoke --jobs 2 --raw-dir results/smoke_raw
