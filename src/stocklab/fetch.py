@@ -1,4 +1,4 @@
-"""Download the public-domain FRED series, build the processed price series and check them against
+"""Download the Federal Reserve source files, build the processed price series and check them against
 the committed manifest.
 
 Raw files go to ``data/raw`` and processed series to ``data/processed`` (both git-ignored). The
@@ -18,7 +18,13 @@ import pandas as pd
 from . import data_sources as ds
 from . import rates
 
-FRED_CSV = "https://fred.stlouisfed.org/graph/fredgraph.csv?id={sid}&cosd=2000-01-01&coed=2025-12-31"
+DDP = "https://www.federalreserve.gov/datadownload/Output.aspx?rel={rel}&series={series}"
+H10_URL = DDP.format(rel="H10", series="60f32914ab61dfab590e0e470153e3ae") + (
+    "&lastobs=&from=01/01/2000&to=12/31/2025&filetype=csv&label=include&layout=seriescolumn&type=package"
+)
+H15_URL = DDP.format(rel="H15", series="bf17364827e38702b42a58cf8eaa3f78") + (
+    "&lastobs=&from=&to=&filetype=csv&label=include&layout=seriescolumn&type=package"  # all observations
+)
 UA = {"User-Agent": "Mozilla/5.0 (stocklab research code; see the repository README)"}
 
 
@@ -26,7 +32,7 @@ def download(
     url: str, cache: Path, name: str, refresh: bool = False, retries: int = 4,
     opener=urllib.request.urlopen, sleeper=time.sleep,
 ) -> bytes:
-    """Fetch ``url`` to ``cache/name`` (cached), retrying with growing waits; FRED throttles bursts."""
+    """Fetch ``url`` to ``cache/name`` (cached), retrying with growing waits if the server throttles."""
     path = Path(cache) / name
     if path.exists() and not refresh:
         return path.read_bytes()
@@ -49,12 +55,14 @@ def build_all(
     raw_dir: Path, refresh: bool = False, fetcher=download, start: str = ds.START, end: str = ds.END,
     min_obs: int = 1000,
 ) -> dict[str, pd.Series]:
-    """Download (or read from the cache) every series and return the processed price series."""
+    """Download (or read from the cache) every source file and return the processed price series."""
+    raw_dir = Path(raw_dir)
+    h10 = fetcher(H10_URL, raw_dir, "fed_h10_daily_rates.csv", refresh).decode("utf-8")
+    h15 = fetcher(H15_URL, raw_dir, "fed_h15_treasury_constant_maturities.csv", refresh).decode("utf-8")
     series: dict[str, pd.Series] = {}
     for name, spec in ds.ASSETS.items():
-        url = FRED_CSV.format(sid=spec.fred_id)
-        blob = fetcher(url, Path(raw_dir), f"fred_{spec.fred_id}.csv", refresh)
-        s = ds.clip_range(ds.parse_fred_csv(blob.decode("utf-8")), start, end)
+        s = ds.parse_fed_ddp(h10 if spec.provider == "h10" else h15, spec.source_key)
+        s = ds.clip_range(s, start, end)
         if spec.kind == "yield":
             s = rates.par_bond_index(s, spec.maturity)
         ds.validate_prices(s, name, min_obs=min_obs)
@@ -79,7 +87,7 @@ def run(data_dir: Path, write_manifest: bool = False, refresh: bool = False) -> 
     series = build_all(data_dir / "raw", refresh)
     manifest = write_processed(series, data_dir / "processed")
     info = {
-        n: {"fred_id": ds.ASSETS[n].fred_id if n in ds.ASSETS else None, "rows": int(len(s)),
+        n: {"source": ds.ASSETS[n].source if n in ds.ASSETS else None, "rows": int(len(s)),
             "first": f"{s.index[0]:%Y-%m-%d}", "last": f"{s.index[-1]:%Y-%m-%d}", "sha256": manifest[n]}
         for n, s in series.items()
     }

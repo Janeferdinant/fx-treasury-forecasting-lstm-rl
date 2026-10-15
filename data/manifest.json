@@ -1,0 +1,58 @@
+{
+  "EURUSD": {
+    "source": "Federal Reserve H.10",
+    "rows": 6518,
+    "first": "2000-01-03",
+    "last": "2025-12-31",
+    "sha256": "d7a554d06be3278e214d5514c9623625aa480bba341cf985d5fdfe305b9e409e"
+  },
+  "USDJPY": {
+    "source": "Federal Reserve H.10",
+    "rows": 6518,
+    "first": "2000-01-03",
+    "last": "2025-12-31",
+    "sha256": "8a9f704f344d91ecf17861f7e58d6528203917c9cd51291c0041d5bf1e5446c5"
+  },
+  "GBPUSD": {
+    "source": "Federal Reserve H.10",
+    "rows": 6518,
+    "first": "2000-01-03",
+    "last": "2025-12-31",
+    "sha256": "6d786212ea01506d1c506d7dd51df306c69623b439546b79a9cc9e476704d183"
+  },
+  "USDCAD": {
+    "source": "Federal Reserve H.10",
+    "rows": 6518,
+    "first": "2000-01-03",
+    "last": "2025-12-31",
+    "sha256": "d9936614f576631fa5cd62be4441bc7de79b5fea3e9931190454478e718518ae"
+  },
+  "AUDUSD": {
+    "source": "Federal Reserve H.10",
+    "rows": 6518,
+    "first": "2000-01-03",
+    "last": "2025-12-31",
+    "sha256": "2018e372a4d7c2b357dcfae0cdbaa1aa9135d9b9c17a4ccc1c920ba6835e0ceb"
+  },
+  "USDCHF": {
+    "source": "Federal Reserve H.10",
+    "rows": 6518,
+    "first": "2000-01-03",
+    "last": "2025-12-31",
+    "sha256": "93ffcb6ac86f185c3c57b1c9682bbe2034b74b98c7f4c93e4d28e09210ff5b20"
+  },
+  "UST2Y": {
+    "source": "Federal Reserve H.15",
+    "rows": 6501,
+    "first": "2000-01-04",
+    "last": "2025-12-31",
+    "sha256": "c295057c0eed028b5043d79072bdeb016189db0062a31412e8116965bea2a28a"
+  },
+  "UST10Y": {
+    "source": "Federal Reserve H.15",
+    "rows": 6501,
+    "first": "2000-01-04",
+    "last": "2025-12-31",
+    "sha256": "7b1fac54af82bf1fb9701de7397770f0186afc47e1a1aa3755a771ce33389485"
+  }
+}

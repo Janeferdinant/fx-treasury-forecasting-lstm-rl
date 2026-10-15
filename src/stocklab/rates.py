@@ -1,11 +1,11 @@
 """A constant-maturity par-bond total-return series built from Treasury constant-maturity yields.
 
-The yield series (FRED ``DGS10``, from Federal Reserve H.15) is not a price. To get a return series
-that a position can earn, each day we revalue a par bond: yesterday it had a coupon equal to
-yesterday's yield and exactly ``maturity`` years left; today it is repriced at today's yield with
-the same maturity (so roll-down is ignored) and earns one trading day of coupon carry. This is a
-standard duration-and-convexity style approximation, not an actual Treasury index and not a
-tradable product.
+The yield series (Federal Reserve H.15 constant-maturity yields, for example ``RIFLGFCY10_N.B``) is
+not a price. To get a return series that a position can earn, each day we revalue a par bond:
+yesterday it had a coupon equal to yesterday's yield and exactly ``maturity`` years left; today it is
+repriced at today's yield with the same maturity (so roll-down is ignored) and earns one trading day
+of coupon carry. This is a standard duration-and-convexity style approximation, not an actual
+Treasury index and not a tradable product.
 """
 
 from __future__ import annotations

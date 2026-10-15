@@ -1,11 +1,15 @@
-"""Asset registry, FRED CSV parsing and checksum helpers for the public-domain daily series.
+"""Asset registry, parser for the Federal Reserve source files, and checksum helpers.
 
-Every series comes from the FRED CSV endpoint (no key). Their original publishers are U.S.
-government agencies; the terms checked at source are recorded in THIRD_PARTY_NOTICES.md.
+Every series is hosted by the Federal Reserve Board's Data Download Program:
+  * H.10 daily exchange rates (noon buying rates in New York, certified by the New York Fed);
+  * H.15 Treasury constant-maturity yields (interpolated by the U.S. Treasury from its yield curve).
+The terms checked at source are recorded in THIRD_PARTY_NOTICES.md. EIA oil and gas spot prices
+were considered and left out: EIA documents their source as a commercial data vendor.
 """
 
 from __future__ import annotations
 
+import csv
 import hashlib
 import io
 from dataclasses import dataclass
@@ -22,8 +26,9 @@ END = "2025-12-31"
 class AssetSpec:
     name: str
     label: str
-    group: str  # fx | commodity | rates
-    fred_id: str
+    group: str  # fx | rates
+    provider: str  # h10 | h15
+    source_key: str  # Fed Data Download series identifier
     source: str
     kind: str = "level"  # level: the series is a price; yield: build a par-bond return index
     maturity: float | None = None
@@ -32,30 +37,42 @@ class AssetSpec:
 ASSETS: dict[str, AssetSpec] = {
     a.name: a
     for a in [
-        AssetSpec("EURUSD", "EUR/USD (USD per EUR)", "fx", "DEXUSEU", "Board of Governors, H.10"),
-        AssetSpec("USDJPY", "USD/JPY (JPY per USD)", "fx", "DEXJPUS", "Board of Governors, H.10"),
-        AssetSpec("GBPUSD", "GBP/USD (USD per GBP)", "fx", "DEXUSUK", "Board of Governors, H.10"),
-        AssetSpec("USDCAD", "USD/CAD (CAD per USD)", "fx", "DEXCAUS", "Board of Governors, H.10"),
-        AssetSpec("BRENT", "Brent crude spot (USD per barrel)", "commodity", "DCOILBRENTEU", "U.S. EIA"),
-        AssetSpec("HENRY_HUB", "Henry Hub natural gas spot (USD per MMBtu)", "commodity", "DHHNGSP",
-                  "U.S. EIA"),
-        AssetSpec("UST10Y", "10-year Treasury par-bond total return (from yields)", "rates", "DGS10",
-                  "Board of Governors, H.15", kind="yield", maturity=10.0),
+        AssetSpec("EURUSD", "EUR/USD (USD per EUR)", "fx", "h10", "RXI$US_N.B.EU", "Federal Reserve H.10"),
+        AssetSpec("USDJPY", "USD/JPY (JPY per USD)", "fx", "h10", "RXI_N.B.JA", "Federal Reserve H.10"),
+        AssetSpec("GBPUSD", "GBP/USD (USD per GBP)", "fx", "h10", "RXI$US_N.B.UK", "Federal Reserve H.10"),
+        AssetSpec("USDCAD", "USD/CAD (CAD per USD)", "fx", "h10", "RXI_N.B.CA", "Federal Reserve H.10"),
+        AssetSpec("AUDUSD", "AUD/USD (USD per AUD)", "fx", "h10", "RXI$US_N.B.AL", "Federal Reserve H.10"),
+        AssetSpec("USDCHF", "USD/CHF (CHF per USD)", "fx", "h10", "RXI_N.B.SZ", "Federal Reserve H.10"),
+        AssetSpec("UST2Y", "2-year Treasury par-bond total return (from yields)", "rates", "h15",
+                  "RIFLGFCY02_N.B", "Federal Reserve H.15", kind="yield", maturity=2.0),
+        AssetSpec("UST10Y", "10-year Treasury par-bond total return (from yields)", "rates", "h15",
+                  "RIFLGFCY10_N.B", "Federal Reserve H.15", kind="yield", maturity=10.0),
     ]
 }
-ASSETS_BY_FRED: dict[str, AssetSpec] = {a.fred_id: a for a in ASSETS.values()}
 
 
-def parse_fred_csv(text: str) -> pd.Series:
-    """FRED ``fredgraph.csv``: a date column and one value column; '.' marks a missing observation."""
-    df = pd.read_csv(io.StringIO(text), na_values=["."])
-    if df.shape[1] < 2:
-        raise ValueError("expected a date column and a value column")
-    s = pd.Series(
-        pd.to_numeric(df.iloc[:, 1], errors="coerce").to_numpy(),
-        index=pd.to_datetime(df.iloc[:, 0]),
-        name="price",
-    ).dropna()
+def parse_fed_ddp(text: str, series_id: str) -> pd.Series:
+    """One series from a Federal Reserve Data Download Program CSV (the 'seriescolumn' layout).
+
+    The column is picked by its unique identifier (for example ``RXI_N.B.JA``). Cells marked ``ND``
+    (no data, such as holidays) or left blank are dropped.
+    """
+    rows = list(csv.reader(io.StringIO(text)))
+    uid = next((i for i, r in enumerate(rows) if r and r[0].strip() == "Unique Identifier:"), None)
+    head = next((i for i, r in enumerate(rows) if r and r[0].strip() == "Time Period"), None)
+    if uid is None or head is None:
+        raise ValueError("not a Federal Reserve data-download file")
+    ids = [c.strip().split("/")[-1] for c in rows[uid][1:]]
+    if series_id not in ids:
+        raise KeyError(series_id)
+    col = ids.index(series_id) + 1
+    dates, vals = [], []
+    for r in rows[head + 1 :]:
+        if len(r) > col and r[0].strip():
+            dates.append(r[0].strip())
+            vals.append(r[col].strip())
+    s = pd.Series(pd.to_numeric(pd.Series(vals), errors="coerce").to_numpy(),
+                  index=pd.to_datetime(pd.Series(dates)), name="price").dropna()
     if s.index.has_duplicates:
         raise ValueError("duplicate dates in the series")
     return s.sort_index()
