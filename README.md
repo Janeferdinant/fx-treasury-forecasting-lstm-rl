@@ -137,8 +137,8 @@ Python 3.11, NumPy, pandas, SciPy, statsmodels, PyTorch (CPU), Gymnasium, pytest
 Prerequisites: Python 3.11 (verified on 3.11.9), about 2 GB of disk for the CPU build of PyTorch, internet access for `stocklab fetch`. No GPU is needed or used.
 
 ```bash
-git clone https://github.com/Janeferdinant/stock-forecasting-lstm-rl.git
-cd stock-forecasting-lstm-rl
+git clone https://github.com/Janeferdinant/fx-treasury-forecasting-lstm-rl.git
+cd fx-treasury-forecasting-lstm-rl
 python -m venv .venv
 source .venv/bin/activate        # Windows: .venv\Scripts\activate
 pip install -r requirements-dev.txt --extra-index-url https://download.pytorch.org/whl/cpu
