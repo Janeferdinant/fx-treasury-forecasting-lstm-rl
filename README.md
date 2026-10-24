@@ -1,6 +1,7 @@
-> **Research code on public historical data. Not investment advice, not a trading system, and nothing here predicts future returns. Simulated trading ignores market impact, taxes, financing and liquidity. Past performance does not predict future results.**
+# stocklab: walk-forward LSTM forecasting and DQN trading on FX and Treasury series, tested against honest baselines
+**The assets are six U.S.-dollar exchange rates (EUR/USD, USD/JPY, GBP/USD, USD/CAD, AUD/USD, USD/CHF) and two U.S. Treasury par-bond total-return series (2-year and 10-year), all from Federal Reserve Board data. The repository contains no stocks, equity indices or commodities, despite its name.**
 
-# stocklab: walk-forward LSTM forecasting and DQN trading, tested against honest baselines
+> **Research code on public historical data. Not investment advice, not a trading system, and nothing here predicts future returns. Simulated trading ignores market impact, taxes, financing and liquidity. Past performance does not predict future results.**
 
 [![License: CC BY-NC-ND 4.0](https://img.shields.io/badge/License-CC%20BY--NC--ND%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc-nd/4.0/)
 
@@ -11,9 +12,9 @@
 | **Question** | Does a small LSTM forecast next-day returns better than a zero forecast, a drift forecast and ARIMA, and does a DQN agent beat buy and hold after transaction costs? |
 | **Data** | Daily series, 2000 to 2025, all public-domain U.S. government data from the Federal Reserve Board: six exchange rates (EUR/USD, USD/JPY, GBP/USD, USD/CAD, AUD/USD, USD/CHF; release H.10) and two Treasury par-bond total-return series built from H.15 constant-maturity yields (2-year and 10-year). Downloaded at run time and checked against committed checksums. Licence evidence is quoted in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). |
 | **Protocol** | Expanding-window walk-forward: 9 or 10 chronological test blocks of 500 days per asset (about 4,480 to 4,500 pooled test days, 2008 to 2025), models fitted only on earlier data, a validation window before each block, 3 seeds, block-bootstrap confidence intervals, Diebold-Mariano tests with Holm correction across assets. |
-| **Forecasting result** | The LSTM's squared-error gain over the zero forecast ranges from -0.25% to +0.02% across the 8 assets. It is better than zero on 1 of 8 (GBP/USD, +0.02%, p = 0.39) and **none is significant**; the smallest raw Diebold-Mariano p-value is 0.39 and every Holm-adjusted p-value is 1.00. ARIMA is no better (best +0.03%, GBP/USD) and the drift forecast is never better than zero. |
-| **Trading result** | The DQN agent's equal-weight Sharpe ratio at 5 bp per unit of turnover is between -2.45 and -1.06, **below buy and hold on all 8 assets**, and its daily excess return over buy and hold has a 95% interval entirely below zero on all 8. Even at 0 bp its Sharpe is between -0.34 and 0.84. |
-| **What the LSTM signal does** | On both Treasury series its direction signal is long on 100% of days, so it is buy and hold there. On the six FX pairs it never beats buy and hold, and for EUR/USD and USD/JPY the paired interval is below zero. |
+| **Forecasting result** | The LSTM's squared-error gain over the zero forecast ranges from -0.25% to +0.02% across the 8 assets. It is better than zero on 1 of 8 (GBP/USD, +0.02%, p = 0.39) and **none is significant**; the smallest raw Diebold-Mariano p-value is 0.39 and every Holm-adjusted p-value is 1.00. ARIMA is no better (best +0.03%, GBP/USD) and the drift forecast is never better than zero. **Status:** Verified (run 2026-10-15, seeds 0, 1, 2). |
+| **Trading result** | The DQN agent's equal-weight Sharpe ratio at 5 bp per unit of turnover is between -2.45 and -1.06, **below buy and hold on all 8 assets**, and its daily excess return over buy and hold has a 95% interval entirely below zero on all 8. Even at 0 bp its Sharpe is between -0.34 and 0.84. **Status:** Verified (run 2026-10-15, seeds 0, 1, 2). |
+| **What the LSTM signal does** | On both Treasury series its direction signal is long on 100% of days, so it is buy and hold there. On the six FX pairs it never beats buy and hold, and for EUR/USD and USD/JPY the paired interval is below zero. **Status:** Verified (run 2026-10-15, seeds 0, 1, 2). |
 | **Verified by** | 108 tests (101 run in CI), ruff clean, committed run logs and raw outputs in [`results/`](results/) and [`docs/runs/`](docs/runs/). |
 
 These are negative results, reported as measured. They describe one small LSTM, one small DQN and these eight series, not forecasting or reinforcement learning in general.
@@ -65,7 +66,7 @@ flowchart LR
 
 ## Results
 
-All numbers below are generated from `results/summary.json` by `stocklab report` (`results/tables.md`) after the runs logged in [`docs/runs/2026-10-15-experiments.md`](docs/runs/2026-10-15-experiments.md) (2026-10-15, seeds 0, 1, 2; the forecast run took 243 s and the DQN run 739 s on 16 logical CPUs with 6 worker processes). Test days are pooled over 9 or 10 walk-forward blocks per asset, from 2008 to 2025-12-31.
+All numbers below are generated from `results/summary.json` by `stocklab report` (`results/tables.md`) after the runs logged in [`docs/runs/2026-10-15-experiments.md`](docs/runs/2026-10-15-experiments.md) (2026-10-15, seeds 0, 1, 2; status of every table below: Verified (run 2026-10-15, seeds 0, 1, 2); the forecast run took 243 s and the DQN run 739 s on 16 logical CPUs with 6 worker processes). Test days are pooled over 9 or 10 walk-forward blocks per asset, from 2008 to 2025-12-31.
 
 ### Forecasting: next-day log return, pooled walk-forward test days
 
